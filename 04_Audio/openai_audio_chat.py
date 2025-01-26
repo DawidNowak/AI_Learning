@@ -69,11 +69,11 @@ with gr.Blocks() as demo:
         submit_btn = gr.Button("Submit", variant="primary")
         clear_btn = gr.ClearButton([audio, chatbot], variant="secondary")
 
-    def chat(audio, history):
+    def chat(resording, history):
         if len(history) == 0:
             history.append({"role": "system", "content": system_message})
 
-        message = audio_to_text(audio)
+        message = audio_to_text(resording)
 
         history.append({"role": "user", "content": message})
 
@@ -87,8 +87,8 @@ with gr.Blocks() as demo:
 
         executor.submit(text_to_audio, result)
 
-        return history
+        return None, history
     
-    submit_btn.click(chat, [audio, chatbot], [chatbot])
+    submit_btn.click(chat, [audio, chatbot], [audio, chatbot])
 
 demo.launch()
