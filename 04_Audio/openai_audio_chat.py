@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import gradio as gr
@@ -8,12 +9,16 @@ import soundfile as sf
 from io import BytesIO
 from pydub import AudioSegment
 from playsound import playsound
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
 openai = OpenAI()
 
-system_message = """You are a helpfull assistant, your name is Bob, please respond to questions, be precise and concise. If you don't know the answer, just say so."""
+system_message = """Jesteś pomocnym asystentem, masz na imię Nova, Proszę odpowiadaj na pytania użytkownika i bądź zwięzła i prezycyjna.\
+    Jeśli nie znasz odpowiedzi na pytanie, to o tym powiedz. Odpowiadaj wyłącznie w języku polskim."""
+
+executor = ThreadPoolExecutor(max_workers=1)
 
 def audio_to_text(audio):
     sample_rate, audio_array = audio  # Unpack the audio tuple
@@ -32,7 +37,8 @@ def audio_to_text(audio):
         with open(temp_file.name, 'rb') as audio_file:
             transcription = openai.audio.transcriptions.create(
                 model="whisper-1",
-                file=audio_file
+                file=audio_file,
+                language='pl'
             )
     return transcription.text
 
@@ -51,53 +57,41 @@ def text_to_audio(message):
     audio.export(temp_file, format="wav")
     playsound(temp_file)
 
-def chat(message, history, audio):
+    if os.path.exists(temp_file):
+        os.remove(temp_file)
 
-    print("\n******history")
-    if history is not None:
-        for entry in history:
-            print(f"entry: {entry}")
-    else:
-        history = []
-        print('Empty history')
 
-    if audio:
-        transcription = audio_to_text(audio)
-        message = transcription
-    print("******")
-    print(f"message: {message}")
+with gr.Blocks() as demo:
+    chatbot = gr.Chatbot(type='messages')
+    msg = gr.Textbox()
+    audio = gr.Audio(sources='microphone', type='numpy')
 
-    messages = [{"role": "system", "content": system_message}]
-    if history is not None:
-        messages.__add__(history)
-    messages.append({"role": "user", "content": message})
+    with gr.Row():
+        submit_btn = gr.Button("Submit", variant="primary")
+        clear_btn = gr.ClearButton([msg, audio, chatbot], variant="secondary")
 
-    history = messages
+    def chat(message, audio, history):
+        if len(history) == 0:
+            history.append({"role": "system", "content": system_message})
 
-    print("******messages")
-    for msg in messages:
-        print(f"{msg}")
-        
-    response = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        stream=False)
+        if audio:
+            message = audio_to_text(audio)
 
-    return response, history
+        history.append({"role": "user", "content": message})
 
-chat_interface = gr.Interface(
-    fn=chat,
-    inputs=[
-        gr.Textbox(label="Message"),
-        gr.State(),  # To hold the chat history
-        gr.Audio(sources='microphone', type='numpy')
-    ],
-    outputs=[
-        gr.Chatbot(label="Chat"),
-        gr.State()  # To hold the updated chat history
-    ],
-    title="Chatbot",
-    description="This is a voice-enabled chatbot."
-)
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=history,
+            stream=False)
 
-chat_interface.launch()
+        result = response.choices[0].message.content
+        history.append({"role": "assistant", "content": result})
+
+        executor.submit(text_to_audio, result)
+
+        return "", history
+    
+    msg.submit(chat, [msg, audio, chatbot], [msg, chatbot])
+    submit_btn.click(chat, [msg, audio, chatbot], [msg, chatbot])
+
+demo.launch()
