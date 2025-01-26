@@ -63,19 +63,17 @@ def text_to_audio(message):
 
 with gr.Blocks() as demo:
     chatbot = gr.Chatbot(type='messages')
-    msg = gr.Textbox()
     audio = gr.Audio(sources='microphone', type='numpy')
 
     with gr.Row():
         submit_btn = gr.Button("Submit", variant="primary")
-        clear_btn = gr.ClearButton([msg, audio, chatbot], variant="secondary")
+        clear_btn = gr.ClearButton([audio, chatbot], variant="secondary")
 
-    def chat(message, audio, history):
+    def chat(audio, history):
         if len(history) == 0:
             history.append({"role": "system", "content": system_message})
 
-        if audio:
-            message = audio_to_text(audio)
+        message = audio_to_text(audio)
 
         history.append({"role": "user", "content": message})
 
@@ -89,9 +87,8 @@ with gr.Blocks() as demo:
 
         executor.submit(text_to_audio, result)
 
-        return "", history
+        return history
     
-    msg.submit(chat, [msg, audio, chatbot], [msg, chatbot])
-    submit_btn.click(chat, [msg, audio, chatbot], [msg, chatbot])
+    submit_btn.click(chat, [audio, chatbot], [chatbot])
 
 demo.launch()
