@@ -13,10 +13,12 @@ openai = OpenAI()
 MODEL = "gpt-4o-mini"
 
 system_message = """
-You are a helpful assistant at a sports equipment store called SportAI.
-Give short, courteous answers, no more than 1 sentence.
-Ask user if he needs any help or if you can help.
-Always be accurate. If you don't know the answer, say so.
+You are the friendly assistant for SportAI, a sports equipment store.
+Provide concise, polite responses limited to one sentence.
+Always inquire if the user needs assistance or if you can help.
+When users request specific equipment, ask whether they are amateur, professional,
+or something superior to better understand their needs.
+Ensure accuracy in your responses, and if you don't know something, simply admit it.
 """
 
 def audio_to_text(audio):
@@ -36,16 +38,15 @@ def audio_to_text(audio):
         with open(temp_file.name, 'rb') as audio_file:
             transcription = openai.audio.transcriptions.create(
                 model="whisper-1",
-                file=audio_file,
-                language='pl'
+                file=audio_file
             )
     return transcription.text
 
 stock = {
     "bike": {
-        "amateur": {"model": "Basic Bike", "price": "$299", "quantity": 3},
-        "professional": {"model": "Professional Bike", "price": "$599", "quantity": 3},
-        "elite": {"model": "Elite Bike", "price": "$1299", "quantity": 1}
+        "amateur": {"model": "Home Fitness Bike", "price": "$299", "quantity": 3},
+        "professional": {"model": "Gym-Quality Bike", "price": "$599", "quantity": 1},
+        "elite": {"model": "High-Performance Bike", "price": "$1299", "quantity": 0}
     },
     "treadmill": {
         "amateur": {"model": "Home Fitness Treadmill", "price": "$399", "quantity": 0},
@@ -64,12 +65,10 @@ def get_stock_info(type, tier):
     
 stock_info_tool = {
     "name": f"{get_stock_info.__name__}",
-    "description": """Get stock information for a specific type of sports equipment 
-        and tier level. Call this whenever a customer inquires about the availability, 
-        model, price, or quantity of a specific category of equipment, for example, 
-        when a customer asks 'What is the price and quantity of professional bikes?'.
-        If the returned quantity is 0 it means this inventory is out of stock,
-        inform user about that.""",
+    "description": """Retrieve stock information for a specific category of sports equipment and tier level.
+        Use this tool when a customer inquires about availability, model, price, or quantity,
+        such as in the question, 'What is the price and quantity of professional bikes?'.
+        If the returned quantity is 0, inform the user that the item is out of stock.""",
     "parameters": {
         "type": "object",
         "properties": {
