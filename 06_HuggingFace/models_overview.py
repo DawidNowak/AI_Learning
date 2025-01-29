@@ -33,6 +33,9 @@ MODEL = 1
 #  No gpu, can't set device="cuda"
 #  Otherwise you can add optional device argument to pipeline() function
 
+# Additional pipelines in Google Collab
+# https://colab.research.google.com/drive/10dSy1Ur4Prj9tJ_YMOu90BzMccBWTtm4?usp=sharing
+
 match MODEL:
     case 1:
         # Sentiment Analysis
