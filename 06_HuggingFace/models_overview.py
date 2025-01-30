@@ -2,10 +2,8 @@ import os
 import torch
 from dotenv import load_dotenv
 from transformers import pipeline
-from diffusers import DiffusionPipeline
 from datasets import load_dataset
 import soundfile as sf
-from IPython.display import Audio
 import shutil
 
 load_dotenv()
