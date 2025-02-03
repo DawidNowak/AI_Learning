@@ -65,4 +65,4 @@ with gr.Blocks() as demo:
         outputs=[markdown]
     )
 
-demo.launch(share=True)
+demo.launch()
