@@ -1,6 +1,4 @@
 import os
-import torch
-import requests
 import gradio as gr
 from dotenv import load_dotenv
 from IPython.display import Markdown, display, update_display
