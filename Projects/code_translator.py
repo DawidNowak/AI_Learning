@@ -126,8 +126,64 @@ def execute_python(code):
 
 def execute(lang: str):
     match lang:
+        case "C#":
+            return execute_csharp()
         case "C++":
             return execute_cpp()
+        
+def execute_csharp():
+    # Install .NET SDK (cross-platform)
+    # Verify with 'dotnet --version' in terminal
+    csharp = languages["C#"]
+    abbrev = csharp['abbrev']
+    source_file = f"{abbrev}.{csharp['ext']}"
+    project_file = f"./Outputs/{abbrev}.csproj"
+
+    # Create proper project file
+    with open(project_file, 'w') as f:
+        f.write(f'''<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+    <OutputPath>./</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="{source_file}" />
+  </ItemGroup>
+</Project>''')
+
+    try:
+        # Clean previous builds
+        subprocess.run(["dotnet", "clean", project_file, "--nologo", "--verbosity", "quiet"], check=True)
+        
+        # Build with optimizations
+        compile_cmd = [
+            "dotnet", "build",
+            project_file,
+            "-c", "Release",
+            "-r", "win-x64",
+            "--nologo",
+            "--verbosity", "quiet"
+        ]
+        subprocess.run(compile_cmd, check=True, text=True, capture_output=True)
+        
+        # Run from output directory
+        exe_path = f"./Outputs/win-x64/{abbrev}.exe"
+        run_result = subprocess.run(
+            [exe_path],
+            check=True,
+            text=True,
+            capture_output=True
+        )
+        return run_result.stdout
+        
+    except subprocess.CalledProcessError as e:
+        return f"Error:\n{e.stderr}\n{e.stdout}"
 
 def execute_cpp():
     # Install MinGW-w64 from Mingw-w64 downloads.
@@ -138,7 +194,6 @@ def execute_cpp():
     cpp = languages["C++"]
     source = f"./Outputs/{cpp['abbrev']}.{cpp['ext']}"
     exe = f"./Outputs/{cpp['abbrev']}.exe"
-    print(source)
     try:
         compile_cmd = ["g++", "-O3", "-ffast-math", "-std=c++17", "-o", exe, source]
         subprocess.run(compile_cmd, check=True, text=True, capture_output=True)
@@ -147,6 +202,8 @@ def execute_cpp():
         return run_result.stdout
     except subprocess.CalledProcessError as e:
         return f"An error occurred:\n{e.stderr}"
+    
+
 
 pi = """
 import time
