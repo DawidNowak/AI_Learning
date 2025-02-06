@@ -1,4 +1,7 @@
 import os
+import io
+import sys
+import subprocess
 from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
@@ -45,6 +48,14 @@ def messages_for(python, language):
         {"role": "user", "content": user_prompt_for(python, language)}
     ]
 
+languages = {
+    "C++": {"abbrev": "cpp", "ext": "cpp"},
+    "C#": {"abbrev": "csharp", "ext": "cs"},
+    "Java": {"abbrev": "java", "ext": "java"},
+    "JavaScript": {"abbrev": "javascript", "ext": "js"},
+    "TypeScript": {"abbrev": "typescript", "ext": "ts"}
+}
+
 def stream_gpt(python, language, model):
     stream = openai.chat.completions.create(
         model=model,
@@ -56,6 +67,7 @@ def stream_gpt(python, language, model):
         fragment = chunk.choices[0].delta.content or ""
         reply += fragment
         yield reply
+    write_output(reply, language)
 
 def stream_claude(python, language, model):
     result = claude.messages.stream(
@@ -69,6 +81,7 @@ def stream_claude(python, language, model):
         for text in stream.text_stream:
             reply += text
             yield reply
+    write_output(reply, language)
 
 def stream_deepseek(python, language, model):
     stream = deepseekai.chat.completions.create(
@@ -81,6 +94,7 @@ def stream_deepseek(python, language, model):
         fragment = chunk.choices[0].delta.content or ""
         reply += fragment
         yield reply
+    write_output(reply, language)
 
 def generate(python, language, model):
     if model in [GPT_40, GPT_4O_MINI, GPT_O1]:
@@ -93,6 +107,46 @@ def generate(python, language, model):
         raise ValueError("Unknown model")
     for stream_so_far in result:
         yield stream_so_far
+
+def write_output(code: str, language: str):
+    lang = languages[language]
+    abbrev = lang["abbrev"]
+    code = code.replace(f"```{abbrev}","").replace("```","")
+    with open(f"./Outputs/{abbrev}.{lang["ext"]}", "w") as file:
+        file.write(code)
+
+def execute_python(code):
+    try:
+        output = io.StringIO()
+        sys.stdout = output
+        exec(code)
+    finally:
+        sys.stdout = sys.__stdout__
+    return output.getvalue()
+
+def execute(lang: str):
+    match lang:
+        case "C++":
+            return execute_cpp()
+
+def execute_cpp():
+    # Install MinGW-w64 from Mingw-w64 downloads.
+    # Add the MinGW bin folder to your system PATH
+    # Example: C:\mingw-w64\bin
+    # Verify installation: g++ --version
+    # Compile using MinGW, et voilà
+    cpp = languages["C++"]
+    source = f"./Outputs/{cpp['abbrev']}.{cpp['ext']}"
+    exe = f"./Outputs/{cpp['abbrev']}.exe"
+    print(source)
+    try:
+        compile_cmd = ["g++", "-O3", "-ffast-math", "-std=c++17", "-o", exe, source]
+        subprocess.run(compile_cmd, check=True, text=True, capture_output=True)
+        run_cmd = [exe]
+        run_result = subprocess.run(run_cmd, check=True, text=True, capture_output=True)
+        return run_result.stdout
+    except subprocess.CalledProcessError as e:
+        return f"An error occurred:\n{e.stderr}"
 
 pi = """
 import time
@@ -124,16 +178,34 @@ with gr.Blocks() as ui:
             label="Select model",
             value=GPT_4O_MINI)
         language = gr.Dropdown(
-            ["C++", "C#", "Java", "JavaScript", "TypeScript"],
+            languages.keys(),
             label="Select Language",
             value="C#"
         )
         convert = gr.Button("Convert code", variant='primary')
+    with gr.Row():
+        run_python = gr.Button("Run python", variant='secondary')
+        run_translated = gr.Button("Run translated", variant='secondary')
+    with gr.Row():
+        python_out = gr.TextArea(label="Python result:")
+        translated_out = gr.TextArea(label="Translated result:")
 
     convert.click(
         generate,
         inputs=[python, language, model],
-        outputs=[generated_code],
+        outputs=[generated_code]
+    )
+
+    run_python.click(
+        execute_python,
+        inputs=[python],
+        outputs=[python_out]
+    )
+
+    run_translated.click(
+        execute,
+        inputs=[language],
+        outputs=[translated_out]
     )
 
 ui.launch(inbrowser=True)
