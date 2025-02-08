@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import sys
 import subprocess
 from dotenv import load_dotenv
@@ -130,6 +131,12 @@ def execute(lang: str):
             return execute_csharp()
         case "C++":
             return execute_cpp()
+        case "Java":
+            return execute_java()
+        case "JavaScript":
+            return execute_js()
+        case "TypeScript":
+            return execute_ts()
         
 def execute_csharp():
     # Install .NET SDK (cross-platform)
@@ -203,7 +210,43 @@ def execute_cpp():
     except subprocess.CalledProcessError as e:
         return f"An error occurred:\n{e.stderr}"
     
+def execute_java():
+    # Install jdk from https://www.openlogic.com/openjdk-downloads
+    java = languages["Java"]
+    abbrev = java['abbrev']
+    ext = java['ext']
+    source = f"./Outputs/{abbrev}.{ext}"
+    main_source = f"./Outputs/Main.{ext}"
 
+    with open(source, 'r') as f:
+        code = f.read()
+    
+    # Change the class name to Main
+    new_code = re.sub(r'public\s+class\s+\w+', 'public class Main', code)
+    
+    if os.path.exists(main_source):
+        os.remove(main_source)
+    with open(main_source, 'w') as f:
+        f.write(new_code)
+    
+    try:
+        # Compile Main.java
+        compile_cmd = ["javac", "-d", "./Outputs", main_source]
+        subprocess.run(compile_cmd, check=True, text=True, capture_output=True)
+        
+        # Run the Main class
+        run_cmd = ["java", "-cp", "./Outputs", "Main"]
+        run_result = subprocess.run(run_cmd, check=True, text=True, capture_output=True)
+        return run_result.stdout
+        
+    except subprocess.CalledProcessError as e:
+        return f"Error:\n{e.stderr}\n{e.stdout}"
+
+def execute_js():
+    return "Not implemented yet"
+
+def execute_ts():
+    return "Not implemented yet"
 
 pi = """
 import time
