@@ -1,8 +1,4 @@
-import os
-import io
-import re
-import sys
-import subprocess
+import os, io, re, sys, subprocess
 from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
@@ -243,10 +239,46 @@ def execute_java():
         return f"Error:\n{e.stderr}\n{e.stdout}"
 
 def execute_js():
-    return "Not implemented yet"
+    # Install Node.js from https://nodejs.org/
+    javascript = languages["JavaScript"]
+    abbrev = javascript['abbrev']
+    ext = javascript['ext']
+    source = f"./Outputs/{abbrev}.{ext}"
+    
+    try:
+        run_cmd = ["node", source]
+        run_result = subprocess.run(run_cmd, check=True, text=True, capture_output=True)
+        return run_result.stdout
+    except subprocess.CalledProcessError as e:
+        return f"Error:\n{e.stderr}\n{e.stdout}"
 
 def execute_ts():
-    return "Not implemented yet"
+    # Install Node.js (https://nodejs.org/)
+    # and TypeScript using: npm install -g typescript
+    # and Node.js type definitions in Outputs dir: npm install --save-dev @types/node
+    # and add tsconfig.json in Outputs dir with content:
+    # {"compilerOptions": {"module": "CommonJS", "target": "ES2020", "lib": ["ES2020"], "types": ["node"], "typeRoots": ["./node_modules/@types"]}}
+    typescript = languages["TypeScript"]
+    abbrev = typescript['abbrev']
+    ext = typescript['ext']
+    output_dir = os.path.abspath("./Outputs")
+    source = os.path.join(output_dir, f"{abbrev}.{ext}")
+
+    try:
+        compile_cmd = ["tsc.cmd", source, "--outDir", output_dir]
+        subprocess.run(compile_cmd, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        # Damn, idk how to make it work. The file is compiled, but it throws an error
+        # Outputs/typescript.ts(2,29): error TS2307: Cannot find module 'perf_hooks' or its corresponding type declarations.
+        print(f"Error:\n{e.stderr}\n{e.stdout}")
+
+    try:
+        compiled_js = f"{output_dir}/{abbrev}.js"
+        run_cmd = ["node", compiled_js]
+        run_result = subprocess.run(run_cmd, check=True, text=True, capture_output=True)
+        return run_result.stdout
+    except subprocess.CalledProcessError as e:
+        return f"Error:\n{e.stderr}\n{e.stdout}"
 
 pi = """
 import time
