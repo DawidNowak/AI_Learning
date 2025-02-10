@@ -1,4 +1,6 @@
+import json
 import nest_asyncio
+import requests
 nest_asyncio.apply()
 
 import os
@@ -6,7 +8,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 from openai import AsyncOpenAI
 import asyncio
-import aiohttp
 import gradio as gr
 from crawl4ai import *
 
@@ -21,6 +22,9 @@ from crawl4ai import *
 # 
 # 1. Crawl4ai: https://github.com/unclecode/crawl4ai
 # pip install -U crawl4ai
+# 2. Create account on LangSearch
+# and put your api key in .env file
+# LANGSEARCH_API_KEY=sk-12345
 # ---------------------------
 
 # ---------------------------
@@ -30,15 +34,24 @@ from crawl4ai import *
 load_dotenv()
 
 DEFAULT_MODEL = "gpt-4o-mini"
-SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
-SERPAPI_URL = "https://serpapi.com/search"
+LANGSEARCH_API_KEY = os.getenv("LANGSEARCH_API_KEY")
+LANGSEARCH_URL = "https://api.langsearch.com/v1/web-search"
 client = AsyncOpenAI()
+
+search_periods = {
+    "Day": "oneDay",
+    "Week": "oneWeek",
+    "Month": "oneMonth",
+    "Year": "oneYear",
+    "No Limit": "noLimit"
+}
 
 # -------------------------------
 # Asynchronous Helper Functions
 # -------------------------------
 
 async def call_openai_async(messages, model=DEFAULT_MODEL):
+    print(f"{datetime.now()} Calling OpenAI")
     try:
         response = await client.chat.completions.create(
             model=model,
@@ -74,30 +87,33 @@ async def generate_search_queries_async(user_query):
             return []
     return []
 
-async def perform_search_async(query):
-    params = {
-        "q": query,
-        "api_key": SERPAPI_API_KEY,
-        "engine": "google"
+def perform_search(query, freshness):
+    headers = {
+        "Authorization": f"Bearer {LANGSEARCH_API_KEY}",
+        "Content-Type": "application/json"
     }
+    payload = json.dumps({
+        "query": query,
+        "freshness": search_periods[freshness],
+        "summary": False,
+        "count": 10
+    })
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(SERPAPI_URL, params=params) as resp:
-                if resp.status == 200:
-                    results = await resp.json()
-                    if "organic_results" in results:
-                        links = [item.get("link") for item in results["organic_results"] if "link" in item]
-                        print(links)
-                        return links
-                    else:
-                        print("No organic results in SERPAPI response.")
-                        return []
-                else:
-                    text = await resp.text()
-                    print(f"SERPAPI error: {resp.status} - {text}")
-                    return []
+        resp = requests.request("POST", LANGSEARCH_URL, headers=headers, data=payload)
+        result = resp.json()
+        if result["code"] == 200:
+            if "data" in result and "webPages" in result["data"] and "value" in result["data"]["webPages"]:
+                links = [item["url"] for item in result["data"]["webPages"]["value"]]
+                print(links)
+                return links
+            else:
+                print("No links in LANGSEARCH response.")
+                return []
+        else:
+            print(f"LANGSEARCH error: {resp.status} - {resp.text}")
+            return []
     except Exception as e:
-        print("Error performing SERPAPI search:", e)
+        print("Error performing LANGSEARCH search:", e)
         return []
     
 async def fetch_webpage_text_async(url):
@@ -215,7 +231,7 @@ async def process_link(link, user_query, search_query, log):
 # Main Asynchronous Routine
 # -----------------------------
 
-async def async_research(user_query, iteration_limit):
+async def async_research(user_query, iteration_limit, freshness):
     aggregated_contexts = []
     all_search_queries = []
     log_messages = []  # List to store intermediate steps
@@ -233,42 +249,45 @@ async def async_research(user_query, iteration_limit):
     while iteration < iteration_limit:
         log_messages.append(f"\n=== Iteration {iteration + 1} ===")
         iteration_contexts = []
-        search_tasks = [perform_search_async(query) for query in new_search_queries]
-        search_results = await asyncio.gather(*search_tasks)
-        unique_links = {}
-        for idx, links in enumerate(search_results):
-            query_used = new_search_queries[idx]
+        search_results = []
+        query_link_map = {}  # Track which query produced which links
+    
+        # Perform searches and store query-link mapping
+        for query in new_search_queries:
+            links = perform_search(query, freshness)
+            search_results.extend(links)
             for link in links:
-                if link not in unique_links:
-                    unique_links[link] = query_used
-        log_messages.append(f"Aggregated {len(unique_links)} unique links from this iteration.")
+                query_link_map[link] = query  # Associate each link with its query
+    
+        log_messages.append(f"Aggregated {len(query_link_map)} unique links from this iteration.")
+    
+        # Process links asynchronously
         link_tasks = [
-            process_link(link, user_query, unique_links[link], log_messages)
-            for link in unique_links
+            process_link(link, user_query, query_link_map[link], log_messages)
+            for link in query_link_map
         ]
         link_results = await asyncio.gather(*link_tasks)
-
+    
         for res in link_results:
             if res:
                 iteration_contexts.append(res)
-
+    
         if iteration_contexts:
             aggregated_contexts.extend(iteration_contexts)
             log_messages.append(f"Found {len(iteration_contexts)} useful contexts in this iteration.")
         else:
             log_messages.append("No useful contexts were found in this iteration.")
+    
+        # Get new search queries
         new_search_queries = await get_new_search_queries_async(user_query, all_search_queries, aggregated_contexts)
-        
-        if new_search_queries == "":
+    
+        if not new_search_queries:  # Handles both empty string and empty list cases
             log_messages.append("LLM indicated that no further research is needed.")
             break
-        elif new_search_queries:
+        else:
             log_messages.append(f"LLM provided new search queries: {new_search_queries}")
             all_search_queries.extend(new_search_queries)
-        else:
-            log_messages.append("LLM did not provide any new search queries. Ending the loop.")
-            break
-
+    
         iteration += 1
 
     log_messages.append("\nGenerating final report...")
@@ -302,16 +321,17 @@ async def determine_report_name(user_query):
     return await call_openai_async(messages)
 
     
-def run_research(user_query, iteration_limit=10):
-    return asyncio.run(async_research(user_query, iteration_limit))
+def run_research(user_query, iteration_limit, freshness):
+    return asyncio.run(async_research(user_query, iteration_limit, freshness))
 
 # -----------------------------
 # Gradio UI Setup
 # -----------------------------
 
-def gradio_run(user_query, iteration_limit):
+def gradio_run(user_query, iteration_limit, freshness):
     try:
-        final_report, logs = run_research(user_query, int(iteration_limit))
+        print(f"Freshness: {freshness}")
+        final_report, logs = run_research(user_query, int(iteration_limit), freshness)
         return final_report, logs
     except Exception as e:
         return f"An error occurred: {e}", ""
@@ -328,10 +348,11 @@ iface = gr.Interface(
     fn=gradio_run,
     inputs=[
         gr.Textbox(lines=5, value=default_prompt, label="Research Query/Topic"),
-        gr.Number(value=2, label="Max Iterations")
+        gr.Number(value=2, label="Max Iterations"),
+        gr.Dropdown(search_periods.keys(), value="Month", label="Search period")
     ],
     outputs=[
-        gr.Textbox(label="Final Report"),
+        gr.Markdown(label="Final Report"),
         gr.Textbox(label="Intermediate Steps Log")
     ],
     title="Research Assistant",
