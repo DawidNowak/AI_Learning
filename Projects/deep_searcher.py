@@ -1,15 +1,13 @@
+import asyncio
 import json
-import nest_asyncio
 import requests
-nest_asyncio.apply()
-
 import os
 from dotenv import load_dotenv
 from datetime import datetime
-from openai import AsyncOpenAI
-import asyncio
+from openai import OpenAI
 import gradio as gr
 from crawl4ai import *
+from crawl4ai.async_webcrawler import AsyncWebCrawler
 
 
 # ---------------------------
@@ -36,7 +34,8 @@ load_dotenv()
 DEFAULT_MODEL = "gpt-4o-mini"
 LANGSEARCH_API_KEY = os.getenv("LANGSEARCH_API_KEY")
 LANGSEARCH_URL = "https://api.langsearch.com/v1/web-search"
-client = AsyncOpenAI()
+
+client = OpenAI()
 
 search_periods = {
     "Day": "oneDay",
@@ -47,13 +46,13 @@ search_periods = {
 }
 
 # -------------------------------
-# Asynchronous Helper Functions
+# Helper Functions
 # -------------------------------
 
-async def call_openai_async(messages, model=DEFAULT_MODEL):
+def call_openai(messages, model=DEFAULT_MODEL):
     print(f"{datetime.now()} Calling OpenAI")
     try:
-        response = await client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model,
             messages=messages,
             stream=False
@@ -63,7 +62,7 @@ async def call_openai_async(messages, model=DEFAULT_MODEL):
         print("Error calling OpenAI:", e)
         return None
     
-async def generate_search_queries_async(user_query):
+def generate_search_queries(user_query):
     prompt = (
         "You are an expert research assistant. Given the user's query, generate up to four distinct, "
         "precise search queries that would help gather complete information on the topic. "
@@ -73,7 +72,7 @@ async def generate_search_queries_async(user_query):
         {"role": "system", "content": f"You are a helpful and precise research assistant. Today is {datetime.now().date()}"},
         {"role": "user", "content": f"User Query: {user_query}\n\n{prompt}"}
     ]
-    response = await call_openai_async(messages)
+    response = call_openai(messages)
     if response:
         try:
             search_queries = eval(response)
@@ -103,9 +102,7 @@ def perform_search(query, freshness):
         result = resp.json()
         if result["code"] == 200:
             if "data" in result and "webPages" in result["data"] and "value" in result["data"]["webPages"]:
-                links = [item["url"] for item in result["data"]["webPages"]["value"]]
-                print(links)
-                return links
+                return [item["url"] for item in result["data"]["webPages"]["value"]]
             else:
                 print("No links in LANGSEARCH response.")
                 return []
@@ -116,22 +113,20 @@ def perform_search(query, freshness):
         print("Error performing LANGSEARCH search:", e)
         return []
     
-async def fetch_webpage_text_async(url):
+async def fetch_webpage_text(url):
     try:
         async with AsyncWebCrawler() as crawler:
-            result = await crawler.arun(
-                url=url,
-            )
+            result = await crawler.arun(url=url)
             if result.success:
                 return result.markdown
             else:
-                print(f"Crawl4AI getch error for {url}: {result.error_message}")
+                print(f"Crawl4AI fetch error for {url}: {result.error_message}")
                 return ""
     except Exception as e:
         print("Error fetching webpage text with Crawl4AI:", e)
         return ""
     
-async def is_page_useful_async(user_query, page_text):
+def is_page_useful(user_query, page_text):
     prompt = (
         "You are a critical research evaluator. Given the user's query and the content of a webpage, "
         "determine if the webpage contains information that is useful for addressing the query. "
@@ -141,7 +136,7 @@ async def is_page_useful_async(user_query, page_text):
         {"role": "system", "content": "You are a strict and concise evaluator of research relevance."},
         {"role": "user", "content": f"User Query: {user_query}\n\nWebpage Content (first 5000 characters):\n{page_text[:5000]}\n\n{prompt}"}
     ]
-    response = await call_openai_async(messages)
+    response = call_openai(messages)
     if response:
         answer = response.strip()
         if answer in ["Yes", "No"]:
@@ -153,7 +148,7 @@ async def is_page_useful_async(user_query, page_text):
                 return "No"
     return "No"
 
-async def extract_relevant_context_async(user_query, search_query, page_text):
+def extract_relevant_context(user_query, search_query, page_text):
     prompt = (
         "You are an expert information extractor. Given the user's query, the search query that led to this page, "
         "and the webpage content, extract all pieces of information that are useful for answering the user's query. "
@@ -163,12 +158,12 @@ async def extract_relevant_context_async(user_query, search_query, page_text):
         {"role": "system", "content": "You are an expert in extracting and summarizing relevant information."},
         {"role": "user", "content": f"User Query: {user_query}\nSearch Query: {search_query}\n\nWebpage Content (first 5000 characters):\n{page_text[:5000]}\n\n{prompt}"}
     ]
-    response = await call_openai_async(messages)
+    response = call_openai(messages)
     if response:
         return response.strip()
     return ""
 
-async def get_new_search_queries_async(user_query, previous_search_queries, all_contexts):
+def get_new_search_queries(user_query, previous_search_queries, all_contexts):
     context_combined = "\n".join(all_contexts)
     prompt = (
         "You are an analytical research assistant. Based on the original query, the search queries performed so far, "
@@ -181,7 +176,7 @@ async def get_new_search_queries_async(user_query, previous_search_queries, all_
         {"role": "system", "content": "You are a systematic research planner."},
         {"role": "user", "content": f"User Query: {user_query}\nPrevious Search Queries: {previous_search_queries}\n\nExtracted Relevant Contexts:\n{context_combined}\n\n{prompt}"}
     ]
-    response = await call_openai_async(messages)
+    response = call_openai(messages)
     if response:
         cleaned = response.strip()
         if cleaned == "":
@@ -198,7 +193,7 @@ async def get_new_search_queries_async(user_query, previous_search_queries, all_
             return []
     return []
 
-async def generate_final_report_async(user_query, all_contexts):
+def generate_final_report(user_query, all_contexts):
     context_combined = "\n".join(all_contexts)
     prompt = (
         "You are an expert researcher and report writer. Based on the gathered contexts below and the original query, "
@@ -209,36 +204,36 @@ async def generate_final_report_async(user_query, all_contexts):
         {"role": "system", "content": "You are a skilled report writer."},
         {"role": "user", "content": f"User Query: {user_query}\n\nGathered Relevant Contexts:\n{context_combined}\n\n{prompt}"}
     ]
-    report = await call_openai_async(messages)
+    report = call_openai(messages)
     return report
 
-async def process_link(link, user_query, search_query, log):
+def process_link(link, user_query, search_query, log):
     log.append(f"Fetching content from: {link}")
-    page_text = await fetch_webpage_text_async(link)
+    page_text = asyncio.run(fetch_webpage_text(link))
     if not page_text:
         log.append(f"Failed to fetch content from: {link}")
         return None
-    usefulness = await is_page_useful_async(user_query, page_text)
+    usefulness = is_page_useful(user_query, page_text)
     log.append(f"Page usefulness for {link}: {usefulness}")
     if usefulness == "Yes":
-        context = await extract_relevant_context_async(user_query, search_query, page_text)
+        context = extract_relevant_context(user_query, search_query, page_text)
         if context:
             log.append(f"Extracted context from {link} (first 200 chars): {context[:200]}")
             return context
     return None
 
 # -----------------------------
-# Main Asynchronous Routine
+# Main Routine
 # -----------------------------
 
-async def async_research(user_query, iteration_limit, freshness):
+def research(user_query, iteration_limit, freshness):
     aggregated_contexts = []
     all_search_queries = []
     log_messages = []  # List to store intermediate steps
     iteration = 0
 
     log_messages.append("Generating initial search queries...")
-    new_search_queries = await generate_search_queries_async(user_query)
+    new_search_queries = generate_search_queries(user_query)
     if not new_search_queries:
         log_messages.append("No search queries were generated by the LLM. Exiting.")
         return "No search queries were generated by the LLM. Exiting.", "\n".join(log_messages)
@@ -261,14 +256,8 @@ async def async_research(user_query, iteration_limit, freshness):
     
         log_messages.append(f"Aggregated {len(query_link_map)} unique links from this iteration.")
     
-        # Process links asynchronously
-        link_tasks = [
-            process_link(link, user_query, query_link_map[link], log_messages)
-            for link in query_link_map
-        ]
-        link_results = await asyncio.gather(*link_tasks)
-    
-        for res in link_results:
+        for link in query_link_map:
+            res = process_link(link, user_query, query_link_map[link], log_messages)
             if res:
                 iteration_contexts.append(res)
     
@@ -279,7 +268,7 @@ async def async_research(user_query, iteration_limit, freshness):
             log_messages.append("No useful contexts were found in this iteration.")
     
         # Get new search queries
-        new_search_queries = await get_new_search_queries_async(user_query, all_search_queries, aggregated_contexts)
+        new_search_queries = get_new_search_queries(user_query, all_search_queries, aggregated_contexts)
     
         if not new_search_queries:  # Handles both empty string and empty list cases
             log_messages.append("LLM indicated that no further research is needed.")
@@ -291,24 +280,24 @@ async def async_research(user_query, iteration_limit, freshness):
         iteration += 1
 
     log_messages.append("\nGenerating final report...")
-    final_report = await generate_final_report_async(user_query, aggregated_contexts)
+    final_report = generate_final_report(user_query, aggregated_contexts)
     try:
-        await save_report(user_query, final_report)
+        save_report(user_query, final_report)
     except Exception as e:
         print(f"Error on saving report: {e}")
     return final_report, "\n".join(log_messages)
     
-async def save_report(user_query, report):
+def save_report(user_query, report):
     output_dir = os.path.abspath("./DeepSearcherReports")
     os.makedirs(output_dir, exist_ok=True)
     
-    file_name = await determine_report_name(user_query)
+    file_name = determine_report_name(user_query)
     file_path = f"{output_dir}/{file_name}"
     
     with open(file_path, "w") as file:
         file.write(report)
 
-async def determine_report_name(user_query):
+def determine_report_name(user_query):
     prompt = (
         "Based on this user query prepare nice and concise file name that could be used ",
         "to save a report on the topic the user is interested in. ",
@@ -318,11 +307,11 @@ async def determine_report_name(user_query):
         {"role": "system", "content": "You are a helpfull assistant."},
         {"role": "user", "content": f"User Query: {user_query}\n\n{prompt}"}
     ]
-    return await call_openai_async(messages)
+    return call_openai(messages)
 
     
 def run_research(user_query, iteration_limit, freshness):
-    return asyncio.run(async_research(user_query, iteration_limit, freshness))
+    return research(user_query, iteration_limit, freshness)
 
 # -----------------------------
 # Gradio UI Setup
@@ -330,7 +319,6 @@ def run_research(user_query, iteration_limit, freshness):
 
 def gradio_run(user_query, iteration_limit, freshness):
     try:
-        print(f"Freshness: {freshness}")
         final_report, logs = run_research(user_query, int(iteration_limit), freshness)
         return final_report, logs
     except Exception as e:
@@ -348,7 +336,7 @@ iface = gr.Interface(
     fn=gradio_run,
     inputs=[
         gr.Textbox(lines=5, value=default_prompt, label="Research Query/Topic"),
-        gr.Number(value=2, label="Max Iterations"),
+        gr.Number(value=4, label="Max Iterations"),
         gr.Dropdown(search_periods.keys(), value="Month", label="Search period")
     ],
     outputs=[
