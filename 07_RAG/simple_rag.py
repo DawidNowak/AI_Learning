@@ -13,7 +13,10 @@ claude = anthropic.Anthropic(api_key=anthropic_api_key)
 
 context = {}
 
-employees = glob.glob("simple_rag_knowledge_base/employees/*")
+# Knowledge base comes from a course - LLM engineering by Edward Donner https://edwarddonner.com/
+# https://www.udemy.com/course/llm-engineering-master-ai-and-large-language-models/?referralCode=35EB41EBB11DD247CF54
+
+employees = glob.glob("knowledge_base/employees/*")
 
 for employee in employees:
     name = employee.split(' ')[-1][:-3]
@@ -22,7 +25,7 @@ for employee in employees:
         doc = f.read()
     context[name]=doc
 
-products = glob.glob("simple_rag_knowledge_base/products/*")
+products = glob.glob("knowledge_base/products/*")
 
 for product in products:
     name = product.split(os.sep)[-1][:-3]
