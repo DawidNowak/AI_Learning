@@ -2,8 +2,6 @@ import os
 import glob
 import shutil
 from dotenv import load_dotenv
-from openai import OpenAI
-import gradio as gr
 
 # pip install langchain-community --user
 # pip install langchain --user
@@ -12,7 +10,7 @@ import gradio as gr
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.schema import Document
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 
 # pip install numpy --user

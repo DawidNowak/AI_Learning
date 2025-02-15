@@ -1,14 +1,13 @@
-
 # Contract Agreement
 
 **Client Name**: Premier Auto Insurance Co.  
-**Product Name**: Carllm  
+**Product Name**: Carllm
 
 ---
 
 ## Terms
 
-1. **Agreement Duration**: This contract is effective from January 1, 2025, and shall remain in effect for a period of twelve (12) months, concluding on December 31, 2025. 
+1. **Agreement Duration**: This contract is effective from January 1, 2025, and shall remain in effect for a period of twelve (12) months, concluding on December 31, 2025.
 2. **Payment**: The Client agrees to pay Insurellm a subscription fee of $2,500 per month for the duration of the contract, payable within 30 days of the invoice date.
 3. **Scope of Services**: The services provided under this contract include access to the Carllm platform, integration support, AI-powered risk assessment tools, customizable coverage plans, and automated customer support.
 4. **Data Security**: Insurellm commits to implementing industry-standard security measures to protect Client data, in accordance with applicable privacy laws.
@@ -48,16 +47,20 @@ This contract represents the complete understanding between the parties concerni
 
 **Authorized Signatures**:
 
-*Premier Auto Insurance Co.*  
-_________________________  
+_Premier Auto Insurance Co._
+
+---
+
 Name: [Client Representative Name]  
 Title: [Client Representative Title]  
-Date: ________________
+Date: ******\_\_\_\_******
 
-*Insurellm*  
-_________________________  
+_Insurellm_
+
+---
+
 Name: [Insurellm Representative Name]  
 Title: [Insurellm Representative Title]  
-Date: ________________
+Date: ******\_\_\_\_******
 
---- 
+---
