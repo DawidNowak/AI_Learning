@@ -13,6 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
 # Add TAVILY_API_KEY to your .env file
+# Add ANTHROPIC_API_KEY to your .env file
 load_dotenv()
 
 class State(TypedDict):

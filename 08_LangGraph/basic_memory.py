@@ -1,23 +1,18 @@
-from io import BytesIO
 from dotenv import load_dotenv
-
 from typing import Annotated
 
+from langchain_anthropic import ChatAnthropic
 from typing_extensions import TypedDict
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
-from langchain_anthropic import ChatAnthropic
 
-from PIL import Image
+from langgraph.checkpoint.memory import MemorySaver
 
 # Add ANTHROPIC_API_KEY to your .env file
 load_dotenv()
 
 class State(TypedDict):
-    # Messages have the type "list". The `add_messages` function
-    # in the annotation defines how this state key should be updated
-    # (in this case, it appends messages to the list, rather than overwriting them)
     messages: Annotated[list, add_messages]
 
 graph_builder = StateGraph(State)
@@ -27,22 +22,21 @@ llm = ChatAnthropic(model="claude-3-5-sonnet-20240620")
 def chatbot(state: State):
     return {"messages": [llm.invoke(state["messages"])]}
 
-# The first argument is the unique node name
-# The second argument is the function or object that will be called whenever
-# the node is used.
 graph_builder.add_node("chatbot", chatbot)
 
-graph_builder.add_edge(START, "chatbot")
-graph_builder.add_edge("chatbot", END)
+graph_builder.set_entry_point("chatbot")
+graph_builder.set_finish_point("chatbot")
 
-# OR use set_entry_point and set_finish_point
-# graph_builder.set_entry_point("chatbot")
-# graph_builder.set_finish_point("chatbot")
+memory = MemorySaver()
 
-graph = graph_builder.compile()
+# Compile the graph with the provided checkpointer
+graph = graph_builder.compile(checkpointer=memory)
 
 # Display the graph image, change to False if you don't want this
 if True:
+    from PIL import Image
+    from io import BytesIO
+
     try:
         image_bytes = graph.get_graph().draw_mermaid_png()
         graph_image = Image.open(BytesIO(image_bytes))
@@ -51,8 +45,14 @@ if True:
         print(f'Error: Could not display graph image. {e}')
         pass
 
+# Pick a thread to use as the key for this conversation.
+config = {"configurable": {"thread_id": "1"}}
+
 def stream_graph_updates(user_input: str):
-    for event in graph.stream({"messages": [{"role": "user", "content": user_input}]}):
+    for event in graph.stream(
+        {"messages": [{"role": "user", "content": user_input}]},
+        config=config
+    ):
         for value in event.values():
             print("Assistant:", value["messages"][-1].content)
 
@@ -65,8 +65,4 @@ while True:
 
         stream_graph_updates(user_input)
     except:
-        # fallback if input() is not available
-        user_input = "What do you know about LangGraph?"
-        print("User: " + user_input)
-        stream_graph_updates(user_input)
         break
