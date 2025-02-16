@@ -2,7 +2,6 @@ import os
 import glob
 import shutil
 from dotenv import load_dotenv
-from openai import OpenAI
 import gradio as gr
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain.text_splitter import CharacterTextSplitter
@@ -55,6 +54,7 @@ vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings, pers
 collection = vectorstore._collection
 sample_embedding = collection.get(limit=1, include=["embeddings"])["embeddings"][0]
 dimensions = len(sample_embedding)
+print(f"Dimensions: {dimensions}")
 
 # create a new Chat with OpenAI
 llm = ChatOpenAI(temperature=0.7, model_name=MODEL)
