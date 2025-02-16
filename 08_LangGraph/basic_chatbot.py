@@ -9,7 +9,6 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_anthropic import ChatAnthropic
 
-from IPython.display import Image
 from PIL import Image
 
 load_dotenv()
@@ -34,6 +33,10 @@ graph_builder.add_node("chatbot", chatbot)
 
 graph_builder.add_edge(START, "chatbot")
 graph_builder.add_edge("chatbot", END)
+
+# OR use set_entry_point and set_finish_point
+# graph_builder.set_entry_point("chatbot")
+# graph_builder.set_finish_point("chatbot")
 
 graph = graph_builder.compile()
 
