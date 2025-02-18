@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import gradio as gr
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.schema import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.memory import ConversationBufferMemory
