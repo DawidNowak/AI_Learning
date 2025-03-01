@@ -74,5 +74,4 @@ class Tester:
 
     @classmethod
     def test(cls, function, data):
-        print(f"Function: {function}, Data: {data}") 
         cls(function, data).run()
